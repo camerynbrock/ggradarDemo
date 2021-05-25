@@ -1,0 +1,266 @@
+---
+title: "ggradar Tidy Tuesday Demo"
+author: "Cameryn Brock"
+date: "5/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## `ggradar`
+
+https://github.com/ricardo-bion/ggradar
+
+If you need to download, can download with 
+`devtools::install_github("ricardo-bion/ggradar", dependencies = TRUE)`
+  
+
+We will also be using `calecopal`
+
+https://github.com/an-bui/calecopal
+
+If you need to download, can download with 
+`devtools::install_github("an-bui/calecopal")`
+
+See all palette names with `names(cal_palettes)`
+
+
+```{r}
+library(palmerpenguins)
+library(ggradar)
+library(calecopal)
+library(tidyverse)
+library(janitor)
+library(tidytuesdayR)
+```
+
+### Read in data with `tidytuesdayR`
+
+Information for tidy tuesday data sets available here: https://github.com/rfordatascience/tidytuesday
+
+We will be using data for global crop yields from Our World in Data. https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-09-01/readme.md
+
+
+```{r}
+crops <- tidytuesdayR::tt_load('2020-09-01')
+
+crops_clean <- crops$key_crop_yields %>% 
+  clean_names() %>% 
+  rename_with(~str_remove(., pattern = "_tonnes_per_hectare"))
+```
+
+
+```{r}
+# warning that 'entity' contains countries, continents, and regions
+# unique(crops$entity)
+# filter to just continent-level
+# select only crops of interest
+
+crops_focal <- crops_clean %>%
+  filter(
+    entity %in% c("Northern America",
+                  "Central America",
+                  "South America",
+                  "Europe",
+                  "Asia",
+                  "Europe",
+                  "Africa")) %>%
+  rename("region" = entity) %>%
+  mutate(region = factor(
+    region,
+    levels = c(
+      "Northern America",
+      "Central America",
+      "South America",
+      "Europe",
+      "Asia",
+      "Africa"))) %>% 
+select(region, 
+         year,
+         wheat,
+         rice,
+         maize,
+         soybeans,
+         potatoes,
+         beans,
+         bananas)
+```
+
+```{r}
+# store max values for later
+
+max_wheat <- max(crops_focal$wheat, na.rm = TRUE)
+max_rice <- max(crops_focal$rice, na.rm = TRUE)
+max_maize <- max(crops_focal$maize, na.rm = TRUE)
+max_soy <- max(crops_focal$soybeans, na.rm = TRUE)
+max_pot <- max(crops_focal$potatoes, na.rm = TRUE)
+max_beans <- max(crops_focal$beans, na.rm = TRUE)
+max_ban <- max(crops_focal$bananas, na.rm = TRUE)
+```
+
+```{r}
+# summarize by mean value
+
+crops_2018 <- crops_focal %>% 
+  filter(year == 2018) %>% 
+  select(!year)
+```
+
+```{r}
+# standardize by max value
+
+crops_stand_2018 <- crops_2018 %>% 
+  mutate(wheat = wheat/max_wheat,
+         rice = rice/max_rice,
+         maize = maize/max_maize,
+         soybeans = soybeans/max_soy,
+         potatoes = potatoes/max_pot,
+         beans = beans/max_beans,
+         bananas = bananas/max_ban)
+```
+
+## Visualize!
+
+You may be thinking you can just make a line graph in ggplot and use coord_polar...
+
+```{r}
+crops_ggplot <- crops_stand_2018 %>% 
+  pivot_longer(2:8,
+               names_to = "crop",
+               values_to = "stand")
+
+ggplot(crops_ggplot, aes(x = crop, y = stand, group = region, color = region)) + 
+  geom_line()
+  
+ggplot(crops_ggplot, aes(x = crop, y = stand, group = region, color = region)) + 
+  geom_line() + 
+  coord_polar()
+```
+
+
+
+```{r}
+# generic output
+ggradar(crops_stand)
+```
+
+```{r}
+# Visualize!
+# colors that represent region
+my_cat_colors <- cal_palette("figmtn")
+my_seq_colors <- cal_palette("sierra1", n = 11, type = "continuous")
+
+# pretty labels
+my_labels = c("Wheat", "Rice", "Maize", 
+              "Soybeans", "Potatoes", "Beans",
+              "Bananas")
+```
+
+
+```{r, fig.width = 10, fig.height = 6}
+ggradar(crops_stand,
+        axis.labels = my_labels,
+        background.circle.transparency = 0.05,
+        gridline.min.colour = "gray70",
+        gridline.mid.colour = "gray60",
+        gridline.max.colour = "gray50") + 
+  scale_color_manual(values = my_cat_colors)
+```
+
+Another way to look at this is by year per country...
+
+```{r}
+# Central America
+
+crops_ca <- crops_focal %>%
+  filter(region == "Central America")
+
+crops_ca_stand <- crops_ca %>% 
+  select(!region) %>%
+  mutate(
+    wheat = wheat / max_wheat,
+    rice = rice / max_rice,
+    maize = maize / max_maize,
+    soybeans = soybeans / max_soy,
+    potatoes = potatoes / max_pot,
+    beans = beans / max_beans,
+    bananas = bananas / max_ban) %>% 
+  filter(year %in% c(seq(from = 1960, to = 2020, by = 5)))
+
+ggradar(crops_ca_stand,
+        axis.labels = my_labels,
+        background.circle.transparency = 0.05,
+        gridline.min.colour = "gray70",
+        gridline.mid.colour = "gray60",
+        gridline.max.colour = "gray50") + 
+  scale_color_manual(values = my_seq_colors)
+```
+
+```{r}
+## North America
+
+crops_na <- crops_focal %>%
+  filter(region == "Northern America") %>% 
+  select(!region) %>%
+  mutate(
+    wheat = wheat / max_wheat,
+    rice = rice / max_rice,
+    maize = maize / max_maize,
+    soybeans = soybeans / max_soy,
+    potatoes = potatoes / max_pot,
+    beans = beans / max_beans,
+    bananas = bananas / max_ban) %>% 
+  filter(year %in% c(seq(from = 1960, to = 2020, by = 5)))
+
+ggradar(crops_na,
+        axis.labels = my_labels,
+        background.circle.transparency = 0.05,
+        gridline.min.colour = "gray70",
+        gridline.mid.colour = "gray60",
+        gridline.max.colour = "gray50") + 
+  scale_color_manual(values = my_seq_colors)
+```
+
+```{r}
+# Africa
+
+crops_af <- crops_focal %>%
+  filter(region == "Africa") %>% 
+  select(!region) %>%
+  mutate(
+    wheat = wheat / max_wheat,
+    rice = rice / max_rice,
+    maize = maize / max_maize,
+    soybeans = soybeans / max_soy,
+    potatoes = potatoes / max_pot,
+    beans = beans / max_beans,
+    bananas = bananas / max_ban) %>% 
+  filter(year %in% c(seq(from = 1960, to = 2020, by = 5)))
+
+ggradar(crops_af,
+        axis.labels = my_labels,
+        background.circle.transparency = 0.05,
+        gridline.min.colour = "gray70",
+        gridline.mid.colour = "gray60",
+        gridline.max.colour = "gray50") + 
+  scale_color_manual(values = my_seq_colors) 
+```
+
+
+
+## Caveats to using radar charts
+
+https://www.data-to-viz.com/caveat/spider.html
+
+* Circular layout is hard to read
+* Difficult to find ranking with no clear order
+* Category order has large impact
+* Scales can be confusing
+* Difficult to evaluate differences
+* Overplotting can make chart hard to read
+
+## Good application example: 
+
+Clark, M. A., Springmann, M., Hill, J., & Tilman, D. (2019). Multiple health and environmental impacts of foods. Proceedings of the National Academy of Sciences, 116(46), 23357–23362. https://doi.org/10.1073/pnas.1906908116
