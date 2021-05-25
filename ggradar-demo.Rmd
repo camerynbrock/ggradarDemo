@@ -6,51 +6,50 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
 ```
 
-## `ggradar`
+### Install packages
 
-https://github.com/ricardo-bion/ggradar
+#### `ggradar`
 
-If you need to download, can download with 
+`ggradar` is a package for making radar charts with ggplot syntax made by Ricardo Bion. See information here: https://github.com/ricardo-bion/ggradar. If you need to download, can download with 
 `devtools::install_github("ricardo-bion/ggradar", dependencies = TRUE)`
-  
 
-We will also be using `calecopal`
+#### `calecopal`
 
-https://github.com/an-bui/calecopal
-
-If you need to download, can download with 
+`calecopal` is a package with color palettes inspired by California. See information and color palettes here: https://github.com/an-bui/calecopal. You can view all palette names with `names(cal_palettes)`. If you need to download, can download with 
 `devtools::install_github("an-bui/calecopal")`
 
-See all palette names with `names(cal_palettes)`
+####`tidytuesdayR`
+
+`tidytuesdayR` is a package for easy access to Tidy Tuesday datasets. See information here: https://github.com/rfordatascience/tidytuesday
+
 
 
 ```{r}
-library(palmerpenguins)
-library(ggradar)
-library(calecopal)
+library(ggradar) # radar plots
+library(calecopal) # california color palettes
+library(tidytuesdayR) # tidy tuesday data
+library(janitor) # data cleaning
 library(tidyverse)
-library(janitor)
-library(tidytuesdayR)
 ```
 
-### Read in data with `tidytuesdayR`
-
-Information for tidy tuesday data sets available here: https://github.com/rfordatascience/tidytuesday
+### Read in data
 
 We will be using data for global crop yields from Our World in Data. https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-09-01/readme.md
-
 
 ```{r}
 crops <- tidytuesdayR::tt_load('2020-09-01')
 
-crops_clean <- crops$key_crop_yields %>% 
-  clean_names() %>% 
-  rename_with(~str_remove(., pattern = "_tonnes_per_hectare"))
+crops_clean <- crops$key_crop_yields %>%
+  clean_names() %>%
+  rename_with( ~ str_remove(., pattern = "_tonnes_per_hectare"))
 ```
 
+### Clean up and focus data to our interest
 
 ```{r}
 # warning that 'entity' contains countries, continents, and regions
@@ -88,6 +87,8 @@ select(region,
          bananas)
 ```
 
+### Standarize for consistent axes
+
 ```{r}
 # store max values for later
 
@@ -98,35 +99,34 @@ max_soy <- max(crops_focal$soybeans, na.rm = TRUE)
 max_pot <- max(crops_focal$potatoes, na.rm = TRUE)
 max_beans <- max(crops_focal$beans, na.rm = TRUE)
 max_ban <- max(crops_focal$bananas, na.rm = TRUE)
+
+# standardize by max value
+crops_stand <- crops_focal %>%
+  mutate(
+    wheat = wheat / max_wheat,
+    rice = rice / max_rice,
+    maize = maize / max_maize,
+    soybeans = soybeans / max_soy,
+    potatoes = potatoes / max_pot,
+    beans = beans / max_beans,
+    bananas = bananas / max_ban)
 ```
 
-```{r}
-# summarize by mean value
+### Let's look at 2018 first...
 
-crops_2018 <- crops_focal %>% 
-  filter(year == 2018) %>% 
+```{r}
+# filter to only 2018 values
+
+crops_2018 <- crops_stand %>%
+  filter(year == 2018) %>%
   select(!year)
 ```
 
-```{r}
-# standardize by max value
 
-crops_stand_2018 <- crops_2018 %>% 
-  mutate(wheat = wheat/max_wheat,
-         rice = rice/max_rice,
-         maize = maize/max_maize,
-         soybeans = soybeans/max_soy,
-         potatoes = potatoes/max_pot,
-         beans = beans/max_beans,
-         bananas = bananas/max_ban)
-```
-
-## Visualize!
-
-You may be thinking you can just make a line graph in ggplot and use coord_polar...
+You may be thinking you can just make a line graph in ggplot and use coord_polar... you cannot!
 
 ```{r}
-crops_ggplot <- crops_stand_2018 %>% 
+crops_ggplot <- crops_2018 %>% 
   pivot_longer(2:8,
                names_to = "crop",
                values_to = "stand")
@@ -139,17 +139,22 @@ ggplot(crops_ggplot, aes(x = crop, y = stand, group = region, color = region)) +
   coord_polar()
 ```
 
+Instead, we'll be using `ggradar`
 
+Here's what the generic output looks like:
 
 ```{r}
 # generic output
-ggradar(crops_stand)
+ggradar(crops_2018)
 ```
 
+But we can also make it prettier
+
 ```{r}
-# Visualize!
-# colors that represent region
+# colors that are (generally..) similar among regions
 my_cat_colors <- cal_palette("figmtn")
+
+# sequential colors for by year
 my_seq_colors <- cal_palette("sierra1", n = 11, type = "continuous")
 
 # pretty labels
@@ -160,84 +165,61 @@ my_labels = c("Wheat", "Rice", "Maize",
 
 
 ```{r, fig.width = 10, fig.height = 6}
-ggradar(crops_stand,
-        axis.labels = my_labels,
-        background.circle.transparency = 0.05,
-        gridline.min.colour = "gray70",
-        gridline.mid.colour = "gray60",
-        gridline.max.colour = "gray50") + 
+ggradar(
+  crops_2018,
+  axis.labels = my_labels,
+  background.circle.transparency = 0.05,
+  gridline.min.colour = "gray70",
+  gridline.mid.colour = "gray60",
+  gridline.max.colour = "gray50") +
   scale_color_manual(values = my_cat_colors)
 ```
 
-Another way to look at this is by year per country...
+#### Now let's look at each region over time
 
-```{r}
+```{r, fig.width = 10, fig.height = 6}
+crops_yearly <- crops_stand %>% 
+  filter(year %in% c(seq(from = 1960, to = 2020, by = 5)))
+ 
 # Central America
 
-crops_ca <- crops_focal %>%
-  filter(region == "Central America")
+crops_ca <- crops_yearly %>%
+  filter(region == "Central America") %>% 
+  select(!region)
 
-crops_ca_stand <- crops_ca %>% 
-  select(!region) %>%
-  mutate(
-    wheat = wheat / max_wheat,
-    rice = rice / max_rice,
-    maize = maize / max_maize,
-    soybeans = soybeans / max_soy,
-    potatoes = potatoes / max_pot,
-    beans = beans / max_beans,
-    bananas = bananas / max_ban) %>% 
-  filter(year %in% c(seq(from = 1960, to = 2020, by = 5)))
-
-ggradar(crops_ca_stand,
-        axis.labels = my_labels,
-        background.circle.transparency = 0.05,
-        gridline.min.colour = "gray70",
-        gridline.mid.colour = "gray60",
-        gridline.max.colour = "gray50") + 
+ggradar(
+  crops_ca,
+  axis.labels = my_labels,
+  background.circle.transparency = 0.05,
+  gridline.min.colour = "gray70",
+  gridline.mid.colour = "gray60",
+  gridline.max.colour = "gray50") +
   scale_color_manual(values = my_seq_colors)
 ```
 
-```{r}
+```{r, fig.width = 10, fig.height = 6}
 ## North America
 
-crops_na <- crops_focal %>%
+crops_na <- crops_yearly %>%
   filter(region == "Northern America") %>% 
-  select(!region) %>%
-  mutate(
-    wheat = wheat / max_wheat,
-    rice = rice / max_rice,
-    maize = maize / max_maize,
-    soybeans = soybeans / max_soy,
-    potatoes = potatoes / max_pot,
-    beans = beans / max_beans,
-    bananas = bananas / max_ban) %>% 
-  filter(year %in% c(seq(from = 1960, to = 2020, by = 5)))
+  select(!region) 
 
-ggradar(crops_na,
-        axis.labels = my_labels,
-        background.circle.transparency = 0.05,
-        gridline.min.colour = "gray70",
-        gridline.mid.colour = "gray60",
-        gridline.max.colour = "gray50") + 
+ggradar(
+  crops_na,
+  axis.labels = my_labels,
+  background.circle.transparency = 0.05,
+  gridline.min.colour = "gray70",
+  gridline.mid.colour = "gray60",
+  gridline.max.colour = "gray50") +
   scale_color_manual(values = my_seq_colors)
 ```
 
-```{r}
+```{r, fig.width = 10, fig.height = 6}
 # Africa
 
-crops_af <- crops_focal %>%
+crops_af <- crops_yearly %>%
   filter(region == "Africa") %>% 
-  select(!region) %>%
-  mutate(
-    wheat = wheat / max_wheat,
-    rice = rice / max_rice,
-    maize = maize / max_maize,
-    soybeans = soybeans / max_soy,
-    potatoes = potatoes / max_pot,
-    beans = beans / max_beans,
-    bananas = bananas / max_ban) %>% 
-  filter(year %in% c(seq(from = 1960, to = 2020, by = 5)))
+  select(!region)
 
 ggradar(crops_af,
         axis.labels = my_labels,
@@ -250,7 +232,7 @@ ggradar(crops_af,
 
 
 
-## Caveats to using radar charts
+#### Caveats to using radar charts
 
 https://www.data-to-viz.com/caveat/spider.html
 
@@ -261,6 +243,6 @@ https://www.data-to-viz.com/caveat/spider.html
 * Difficult to evaluate differences
 * Overplotting can make chart hard to read
 
-## Good application example: 
+Good application example: 
 
 Clark, M. A., Springmann, M., Hill, J., & Tilman, D. (2019). Multiple health and environmental impacts of foods. Proceedings of the National Academy of Sciences, 116(46), 23357–23362. https://doi.org/10.1073/pnas.1906908116
