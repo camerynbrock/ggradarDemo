@@ -23,7 +23,7 @@ knitr::opts_chunk$set(echo = TRUE,
 `calecopal` is a package with color palettes inspired by California. See information and color palettes here: https://github.com/an-bui/calecopal. You can view all palette names with `names(cal_palettes)`. If you need to download, can download with 
 `devtools::install_github("an-bui/calecopal")`
 
-####`tidytuesdayR`
+### `tidytuesdayR`
 
 `tidytuesdayR` is a package for easy access to Tidy Tuesday datasets. See information here: https://github.com/rfordatascience/tidytuesday
 
